@@ -30,7 +30,7 @@ Pins 25, 28, 29, 33, 36, 37, 38, 39 each drive two LEDs wired in parallel. That 
 |-----------|---------|
 | Microcontroller | Teensy 4.1 |
 | Audio | Teensy Audio Shield Rev D |
-| Storage | SD card (in Audio Shield slot) |
+| Storage | microSD card (in Teensy 4.1 built-in slot) |
 
 The MAX98357A used in earlier versions is no longer part of this build.
 

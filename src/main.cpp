@@ -9,7 +9,7 @@
 //     v1_6 created:  2026-05-12 -- 1113 CDT -KL
 //     last updated:  2025-07-17 -- 0004 PDT -KL
 //     last updated:  2026-04-29 -- 0251 CDT -KL
-//     last updated:  2026-06-01 -- 1259 CDT
+//     last updated:  2026-06-01 -- 1520 CDT
 //
 //           author:  Kevin Lange
 //      description:  Main code for Johnny 4 voice audio and mouth LEDs
@@ -258,7 +258,7 @@ void initAudio() {
   sgtl5000.enable();
   sgtl5000.volume(0.8f);
 
-  if (!SD.begin(10)) {
+  if (!SD.begin(BUILTIN_SDCARD)) {
     Serial.println("ERROR: SD card not found.");
     errorBlink();
   }
