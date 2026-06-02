@@ -11,6 +11,7 @@
 //     last updated:  2026-04-29 -- 0251 CDT -KL
 //     last updated:  2026-06-01 -- 1520 CDT
 //     last updated:  2026-06-02 -- 0953 CDT
+//     last updated:  2026-06-02 -- 1015 CDT
 //
 //           author:  Kevin Lange
 //      description:  Main code for Johnny 4 voice audio and mouth LEDs
@@ -37,6 +38,8 @@
 //                    v1_5   -- Stripped back to LED sweep test to verify all 18 channels
 //                    v1_6   -- Replaced bar-graph approach with 5-tier amplitude mapping
 //                           -- Added gamma-corrected PWM and piecewise linear thresholds
+//                    v1_7   -- Added SD card file list scanning at boot
+//                           -- Added jukebox serial protocol (PLAY/STOP/PLAYING/LIST)
 //
 //
 //
@@ -202,6 +205,13 @@ const unsigned long UPDATE_INTERVAL_MS = 20;
 const unsigned long ESP32_BAUD         = 115200;
 
 // ---------------------------------------------------------------------------
+// JUKEBOX FILE LIST
+// ---------------------------------------------------------------------------
+const uint8_t MAX_FILES     = 50;
+const uint8_t FILE_ID_LEN   =  2;
+const uint8_t FILE_NAME_MAX = 22;  // display name chars after 2-char ID, including extension
+
+// ---------------------------------------------------------------------------
 // AUDIO OBJECTS
 // ---------------------------------------------------------------------------
 AudioPlaySdWav        playSdWav;
@@ -222,6 +232,20 @@ float         smoothedPeak    = 0.0f;
 unsigned long lastUpdate      = 0;
 
 // ---------------------------------------------------------------------------
+// JUKEBOX STATE
+// ---------------------------------------------------------------------------
+struct FileEntry {
+  char id[FILE_ID_LEN + 1];
+  char name[FILE_NAME_MAX + 1];
+  char fullname[FILE_ID_LEN + FILE_NAME_MAX + 1];
+};
+
+FileEntry fileList[MAX_FILES];
+uint8_t   fileCount  = 0;
+char      nowPlaying[FILE_ID_LEN + 1] = "";
+String    serialBuf  = "";
+
+// ---------------------------------------------------------------------------
 // FORWARD DECLARATIONS
 // ---------------------------------------------------------------------------
 void    initLEDs();
@@ -232,35 +256,38 @@ void    setMouthLevel(float level);
 void    writeTier(const uint8_t* pins, uint8_t count, uint8_t pwm);
 uint8_t gammaCorrect(float fraction);
 void    errorBlink();
+void    scanSD();
+void    sendFileList();
+void    checkSerial();
+void    processSerialLine(const String &line);
 
 // ---------------------------------------------------------------------------
 // SETUP
 // ---------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
-  Serial3.begin(ESP32_BAUD);
+  Serial6.begin(ESP32_BAUD);
 
   initLEDs();
   initAudio();
 
+  scanSD();
+  sendFileList();
+
   Serial.println("Robot mouth ready.");
-  playSdWav.play("TRACK01.WAV");
 }
 
 // ---------------------------------------------------------------------------
 // MAIN LOOP
 // ---------------------------------------------------------------------------
 void loop() {
+  checkSerial();
+
   unsigned long now = millis();
   if (now - lastUpdate < UPDATE_INTERVAL_MS) return;
   lastUpdate = now;
 
   updateLEDs();
-
-  if (!playSdWav.isPlaying()) {
-    delay(500);
-    playSdWav.play("TRACK01.WAV");
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -367,4 +394,79 @@ void errorBlink() {
     for (uint8_t i = 0; i < NUM_PINS; i++) analogWrite(ALL_PINS[i], 0);
     delay(300);
   }
+}
+
+void scanSD() {
+  File root = SD.open("/");
+  while (fileCount < MAX_FILES) {
+    File entry = root.openNextFile();
+    if (!entry) break;
+    if (entry.isDirectory()) { entry.close(); continue; }
+
+    const char *fname = entry.name();
+    size_t len = strlen(fname);
+
+    if (len < 6) { entry.close(); continue; }  // minimum: "XX.WAV"
+
+    // Teensy SD library returns uppercase names
+    if (strcmp(fname + len - 4, ".WAV") != 0) { entry.close(); continue; }
+
+    FileEntry &fe = fileList[fileCount];
+
+    strncpy(fe.id, fname, FILE_ID_LEN);
+    fe.id[FILE_ID_LEN] = '\0';
+
+    strncpy(fe.name, fname + FILE_ID_LEN, FILE_NAME_MAX);
+    fe.name[FILE_NAME_MAX] = '\0';
+
+    strncpy(fe.fullname, fname, sizeof(fe.fullname) - 1);
+    fe.fullname[sizeof(fe.fullname) - 1] = '\0';
+
+    fileCount++;
+    entry.close();
+  }
+  root.close();
+  Serial.printf("SD scan: %d files found.\n", fileCount);
+}
+
+void sendFileList() {
+  Serial6.printf("LIST_START:%d\n", fileCount);
+  for (uint8_t i = 0; i < fileCount; i++) {
+    Serial6.printf("%s|%s\n", fileList[i].id, fileList[i].name);
+  }
+  Serial6.println("LIST_END");
+}
+
+void checkSerial() {
+  while (Serial6.available()) {
+    char c = (char)Serial6.read();
+    if (c == '\n') {
+      serialBuf.trim();
+      if (serialBuf.length() > 0) processSerialLine(serialBuf);
+      serialBuf = "";
+    } else if (c != '\r') {
+      serialBuf += c;
+    }
+  }
+}
+
+void processSerialLine(const String &line) {
+  if (line.startsWith("PLAY:")) {
+    String id = line.substring(5);
+    for (uint8_t i = 0; i < fileCount; i++) {
+      if (strncmp(fileList[i].id, id.c_str(), FILE_ID_LEN) == 0) {
+        playSdWav.stop();
+        playSdWav.play(fileList[i].fullname);
+        strncpy(nowPlaying, fileList[i].id, FILE_ID_LEN);
+        nowPlaying[FILE_ID_LEN] = '\0';
+        Serial6.printf("PLAYING:%s\n", nowPlaying);
+        return;
+      }
+    }
+  } else if (line == "STOP") {
+    playSdWav.stop();
+    nowPlaying[0] = '\0';
+    Serial6.println("PLAYING:");
+  }
+  // Other lines (volume,neck CSV from j4_receiver) are ignored here
 }
