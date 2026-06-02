@@ -31,8 +31,23 @@ Pins 25, 28, 29, 33, 36, 37, 38, 39 each drive two LEDs wired in parallel. That 
 | Microcontroller | Teensy 4.1 |
 | Audio | Teensy Audio Shield Rev D |
 | Storage | microSD card (in Teensy 4.1 built-in slot) |
+| LED switching | RFP30N06LE N-channel MOSFET (one per LED channel) |
 
 The MAX98357A used in earlier versions is no longer part of this build.
+
+## MOSFET wiring
+
+Each of the 18 LED channels uses a RFP30N06LE N-channel MOSFET to switch a 12V LED supply from 3.3V Teensy logic. The RFP30N06LE is rated 30A / 60V and fully enhances at Vgs ~2V, so the 3.3V output drives it with margin to spare.
+
+Repeat this wiring for each channel:
+
+| MOSFET pin | Connection |
+|------------|------------|
+| Gate | Teensy PWM pin |
+| Source | GND (shared with Teensy) |
+| Drain | LED cathode (-) |
+
+The LED anode (+) connects to 12V through a current-limiting resistor sized for the LED forward voltage and desired current.
 
 ## Amplitude tiers
 

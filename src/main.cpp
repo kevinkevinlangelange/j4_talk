@@ -10,6 +10,7 @@
 //     last updated:  2025-07-17 -- 0004 PDT -KL
 //     last updated:  2026-04-29 -- 0251 CDT -KL
 //     last updated:  2026-06-01 -- 1520 CDT
+//     last updated:  2026-06-02 -- 0953 CDT
 //
 //           author:  Kevin Lange
 //      description:  Main code for Johnny 4 voice audio and mouth LEDs
@@ -56,6 +57,26 @@
 //
 //  The issue that took days to resolve: just needed everything to be grounded. -KL
 // *******************************************
+//  ------------------------------------------
+//
+//
+//
+//
+//
+//  ------------------------------------------
+//  RFP30N06LE MOSFET -- LED switching (one per channel)
+//  ------------------------------------------
+//  Each Teensy PWM pin drives a RFP30N06LE N-channel MOSFET to switch
+//  the 12V LED supply from 3.3V logic.
+//
+//  Wiring (repeat for each of the 18 LED channels):
+//    Gate   -- Teensy PWM pin (3.3V logic is sufficient to fully enhance this FET)
+//    Source -- GND (shared ground with Teensy)
+//    Drain  -- LED cathode (-)
+//    LED anode (+) -- 12V through a current-limiting resistor
+//
+//  The RFP30N06LE is rated 30A / 60V and turns on fully at Vgs ~2V,
+//  so the 3.3V Teensy output drives it with margin to spare.
 //  ------------------------------------------
 //
 //
