@@ -1,5 +1,5 @@
 //******************************************************************************
-//        file name:  j4_talk_v1_4 [ADAPTED FROM gp_talk_v1_4]
+//        file name:  j4_talk [ADAPTED FROM gp_talk_v1_4]
 //     v0_1 created:  2024-03-12 -- 1523 CDT -KL
 //     v0_8 updated:  2024-06-24 -- 1440 CDR -KL
 //     v1_2 created:  2025-05-26 -- 0142 CDT -KL
@@ -12,6 +12,7 @@
 //     last updated:  2026-06-01 -- 1520 CDT
 //     last updated:  2026-06-02 -- 0953 CDT
 //     last updated:  2026-06-02 -- 1015 CDT
+//     last updated:  2026-06-10 -- CDT
 //
 //           author:  Kevin Lange
 //      description:  Main code for Johnny 4 voice audio and mouth LEDs
@@ -40,6 +41,15 @@
 //                           -- Added gamma-corrected PWM and piecewise linear thresholds
 //                    v1_7   -- Added SD card file list scanning at boot
 //                           -- Added jukebox serial protocol (PLAY/STOP/PLAYING/LIST)
+//                    v1_8   -- MOVED LED CHANNELS: 24 to 14, 25 to 15 (pins 24/25 are
+//                              Serial6 to the receiver -- driving them as PWM killed
+//                              the serial link), 38 to 10, 39 to 11 (pins 38/39 have
+//                              no PWM on the Teensy 4.1, they could only snap on/off)
+//                           -- Volume from the controller pot now applied to SGTL5000
+//                              (was fixed at 0.8)
+//                           -- Re-send file list on LIST? request from receiver
+//                           -- Report end of track over serial so the now-playing
+//                              highlight clears on the controller display
 //
 //
 //
@@ -91,14 +101,14 @@
 //  ------------------------------------------
 //  VIN:
 //  GND:
-//  0~:
-//  09:   LED PWM Control
-//  24:   Serial Transmit (TX6) to LilyGO TTGO T-Display (pin 2)
-//  25:   Serial Receive (RX6) from LilyGO TTGO T-Display (pin 17)
+//  24:   Serial Transmit (TX6) to LilyGO TTGO T-Display j4_receiver (pin 2)
+//  25:   Serial Receive (RX6) from LilyGO TTGO T-Display j4_receiver (pin 17)
 //
-//  33:   Jaw Servo
-//  36:   Neck Servo
-//  37:   Right Arm Servo
+//  Mouth LED channels (PWM, via RFP30N06LE MOSFET gates):
+//  02, 03, 04, 05, 06, 09, 10, 11, 14, 15, 16, 17, 22, 28, 29, 33, 36, 37
+//
+//  Used by Audio Shield Rev D (do not reuse):
+//  07, 08, 20, 21, 23 (I2S) and 18, 19 (I2C)
 //  ------------------------------------------
 //
 //
@@ -121,23 +131,23 @@
 //
 //           MOUTH LED PHYSICAL LAYOUT:
 //
-//            2   3   4   5   6   ||  9   16   17   22   24
-//            25                                                          25
+//            2   3   4   5   6   ||  9   16   17   22   14
+//            15                                                          15
 //            28                                                          28
 //            29                                                          29
 //            33                                                          33
 //            36                                                          36
 //            37                                                          37
-//            38                                                          38
-//            39                                                          39
+//            10                                                          10
+//            11                                                          11
 //
 // AMPLITUDE TIERS (each tier ADDS to the previous one):
 //   Level 0 (silence):  all off
 //   Level 1 (quiet):    6, 9                       (innermost pair)
-//   Level 2:           +5, 16, 25, 28
+//   Level 2:           +5, 16, 15, 28
 //   Level 3:           +4, 17, 29, 33
 //   Level 4:           +3, 22, 36, 37
-//   Level 5 (loudest): +2, 24, 38, 39              (outermost)
+//   Level 5 (loudest): +2, 14, 10, 11              (outermost)
 //
 // BRIGHTNESS BEHAVIOUR:
 //   - Lower tiers stay fully lit at 255.
@@ -146,18 +156,20 @@
 //   - Brightness is gamma-corrected so partial-tier ramps look visually
 //     linear to the human eye.
 //
-// Note: pins 25, 28, 29, 33, 36, 37, 38, 39 each drive a pair of LEDs
+// Note: pins 10, 11, 15, 28, 29, 33, 36, 37 each drive a pair of LEDs
 //       wired in parallel -- handled by the wiring, not the code.
 // =============================================================================
 
 // ---------------------------------------------------------------------------
 // AMPLITUDE TIER PIN GROUPS
 // ---------------------------------------------------------------------------
+// Pins 24/25 are Serial6 to the receiver and pins 38/39 have no PWM hardware
+// on the Teensy 4.1, so those four channels live on 14/15 and 10/11 instead.
 const uint8_t TIER_1_PINS[] = { 6, 9 };
-const uint8_t TIER_2_PINS[] = { 5, 16, 25, 28 };
+const uint8_t TIER_2_PINS[] = { 5, 16, 15, 28 };
 const uint8_t TIER_3_PINS[] = { 4, 17, 29, 33 };
 const uint8_t TIER_4_PINS[] = { 3, 22, 36, 37 };
-const uint8_t TIER_5_PINS[] = { 2, 24, 38, 39 };
+const uint8_t TIER_5_PINS[] = { 2, 14, 10, 11 };
 
 const uint8_t TIER_1_COUNT = sizeof(TIER_1_PINS) / sizeof(TIER_1_PINS[0]);
 const uint8_t TIER_2_COUNT = sizeof(TIER_2_PINS) / sizeof(TIER_2_PINS[0]);
@@ -168,8 +180,8 @@ const uint8_t TIER_5_COUNT = sizeof(TIER_5_PINS) / sizeof(TIER_5_PINS[0]);
 const uint8_t NUM_TIERS = 5;
 
 const uint8_t ALL_PINS[] = {
-  2, 3, 4, 5, 6, 9, 16, 17,
-  22, 24, 25, 28, 29, 33, 36, 37, 38, 39
+  2, 3, 4, 5, 6, 9, 10, 11, 14,
+  15, 16, 17, 22, 28, 29, 33, 36, 37
 };
 const uint8_t NUM_PINS = sizeof(ALL_PINS) / sizeof(ALL_PINS[0]);
 
@@ -244,6 +256,8 @@ FileEntry fileList[MAX_FILES];
 uint8_t   fileCount  = 0;
 char      nowPlaying[FILE_ID_LEN + 1] = "";
 String    serialBuf  = "";
+int           lastVolume      = -1;  // last 0-100 value applied to the SGTL5000
+unsigned long playStartMillis = 0;
 
 // ---------------------------------------------------------------------------
 // FORWARD DECLARATIONS
@@ -288,6 +302,15 @@ void loop() {
   lastUpdate = now;
 
   updateLEDs();
+
+  // Report end of track so the now-playing highlight clears downstream.
+  // The 250ms grace period matters: isPlaying() reads false for a few ms
+  // right after play() while the WAV header is still being parsed.
+  if (nowPlaying[0] != '\0' && !playSdWav.isPlaying()
+      && now - playStartMillis > 250) {
+    nowPlaying[0] = '\0';
+    Serial6.println("PLAYING:");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -457,16 +480,33 @@ void processSerialLine(const String &line) {
       if (strncmp(fileList[i].id, id.c_str(), FILE_ID_LEN) == 0) {
         playSdWav.stop();
         playSdWav.play(fileList[i].fullname);
+        playStartMillis = millis();
         strncpy(nowPlaying, fileList[i].id, FILE_ID_LEN);
         nowPlaying[FILE_ID_LEN] = '\0';
         Serial6.printf("PLAYING:%s\n", nowPlaying);
         return;
       }
     }
+
   } else if (line == "STOP") {
     playSdWav.stop();
     nowPlaying[0] = '\0';
     Serial6.println("PLAYING:");
+
+  } else if (line == "LIST?") {
+    // Receiver missed the boot-time list (it booted after us) -- send it again
+    sendFileList();
+
+  } else {
+    // "volume,neck" CSV from j4_receiver. Volume is 0-100 from the controller
+    // pot; neck is ignored here. Only touch the SGTL5000 when the value changes.
+    int comma = line.indexOf(',');
+    if (comma > 0) {
+      int vol = line.substring(0, comma).toInt();
+      if (vol != lastVolume && vol >= 0 && vol <= 100) {
+        lastVolume = vol;
+        sgtl5000.volume(vol * 0.008f);  // 0-100 mapped to 0.0-0.8 (safe max)
+      }
+    }
   }
-  // Other lines (volume,neck CSV from j4_receiver) are ignored here
 }
