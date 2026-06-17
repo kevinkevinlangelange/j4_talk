@@ -13,6 +13,8 @@
 //     last updated:  2026-06-02 -- 0953 CDT
 //     last updated:  2026-06-02 -- 1015 CDT
 //     last updated:  2026-06-10 -- CDT
+//     last updated:  2026-06-17 -- CDT (added "PING" heartbeat over Serial6 so
+//                    j4_receiver/j4_controller can show j4_talk as connected)
 //
 //           author:  Kevin Lange
 //      description:  Main code for Johnny 4 voice audio and mouth LEDs
@@ -296,6 +298,14 @@ void setup() {
 // ---------------------------------------------------------------------------
 void loop() {
   checkSerial();
+
+  // Heartbeat so j4_receiver can show "j4_talk: CONNECTED" on its status screen.
+  // This board is otherwise silent unless a track plays or the list is requested.
+  static unsigned long heartbeat_prev = 0;
+  if (millis() - heartbeat_prev >= 1000) {
+    heartbeat_prev = millis();
+    Serial6.println("PING");
+  }
 
   unsigned long now = millis();
   if (now - lastUpdate < UPDATE_INTERVAL_MS) return;

@@ -7,6 +7,7 @@ Audio and mouth LED firmware for the Johnny 4 robot. Runs on a Teensy 4.1 with a
 - Scans the SD card for WAV files at boot and serves them as a jukebox
 - Plays, stops, and reports tracks over a serial link from the j4_receiver (PLAY / STOP / LIST? in, PLAYING: out)
 - Reports end of track over serial so the now-playing highlight clears on the controller display
+- Sends a `PING` heartbeat once per second so j4_receiver (and the controller) can show j4_talk as connected on the status screen
 - Applies the controller's volume pot to the SGTL5000 codec (previously fixed at 0.8)
 - Analyzes live audio amplitude using the AudioAnalyzePeak library
 - Drives 18 LEDs across 5 amplitude tiers -- the mouth opens progressively as audio gets louder
