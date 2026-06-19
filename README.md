@@ -89,18 +89,40 @@ Audio Shield Rev D occupies 7, 8, 20, 21, 23 (I2S) and 18, 19 (I2C); the SD card
 
 ## Pin diagram
 
+Standard Teensy 4.1 layout, component side up, USB at the TOP. The two long
+edges read top-to-bottom; `*` marks a pin this firmware uses.
+
 ```
-                       Teensy 4.1  -  j4_talk
-                  +--------------------------------------+
-  receiver GPIO2 <-| 24 (Serial6 TX)    [ Audio Shield ]|
-  receiver GPIO17 ->| 25 (Serial6 RX)     7 8 18 19 20  |
-                  |                       21 23 + SD     |
-   mouth LEDs <----| 2 3 4 5 6 9 10 11 14 15 16 17 22    |
-   (via MOSFETs)   | 28 29 33 36 37                      |
-                  |              3V3   GND   USB         |
-                  +--------------------------------------+
-       LED tiers:  T1: 6,9   T2: 5,16,15,28   T3: 4,17,29,33
-                   T4: 3,22,36,37             T5: 2,14,10,11
+                      +======[ USB ]======+
+                GND  -| GND            5V |-  5V
+                 0   -|  0            GND |-  GND
+                 1   -|  1           3.3V |-  3.3V
+      LED T5     2  *-|  2            23  |-  (audio I2S)
+      LED T4     3  *-|  3            22  |-* LED T4
+      LED T3     4  *-|  4            21  |-  (audio I2S)
+      LED T2     5  *-|  5            20  |-  (audio I2S)
+      LED T1     6  *-|  6            19  |-  (audio I2C)
+      (audio)    7   -|  7            18  |-  (audio I2C)
+      (audio)    8   -|  8            17  |-* LED T3
+      LED T1     9  *-|  9            16  |-* LED T2
+      LED T5     10 *-| 10            15  |-* LED T2
+      LED T5     11 *-| 11            14  |-* LED T5
+                 12  -| 12            13  |-  (LED_BUILTIN)
+   Serial6 TX    24 *-| 24            41  |-
+   Serial6 RX    25 *-| 25            40  |-
+                 26  -| 26            39  |-
+                 27  -| 27            38  |-
+      LED T2     28 *-| 28            37  |-* LED T4
+      LED T3     29 *-| 29            36  |-* LED T4
+                 30  -| 30            35  |-
+                 31  -| 31            34  |-
+                 32  -| 32         (bottom: SD card + SMD pads)
+      LED T3     33 *-| 33                |
+                      +===================+
+
+   Serial6: 24 (TX) -> j4_receiver GPIO 2 ;  25 (RX) <- j4_receiver GPIO 17
+   Audio Shield Rev D uses 7, 8, 20, 21, 23 (I2S) + 18, 19 (I2C) + built-in SD.
+   LED tiers: T1 6,9 | T2 5,16,15,28 | T3 4,17,29,33 | T4 3,22,36,37 | T5 2,14,10,11
 ```
 
 ## Jukebox serial protocol
