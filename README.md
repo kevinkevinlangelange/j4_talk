@@ -15,17 +15,29 @@ Audio and mouth LED firmware for the Johnny 4 robot. Runs on a Teensy 4.1 with a
 
 ## LED layout
 
-18 PWM-capable Teensy pins drive the LED array. Each group of LEDs lights up as a tier when amplitude crosses its threshold:
+18 PWM-capable Teensy pins drive 18 LEDs, one per pin, named after their physical position: **10 across the front** (`front_LED_01` on the far left up to `front_LED_10` on the far right) and **8 down the side** (`side_LED_01` at the top down to `side_LED_08`).
 
-| Tier | Pins | Description |
-|------|------|-------------|
-| 1 | 6, 9 | innermost pair |
-| 2 | 5, 16, 15, 28 | |
-| 3 | 4, 17, 29, 33 | |
-| 4 | 3, 22, 36, 37 | |
-| 5 | 2, 14, 10, 11 | outermost (full open) |
+**Front row, left to right:**
 
-Pins 10, 11, 15, 28, 29, 33, 36, 37 each drive two LEDs wired in parallel. That is handled in the wiring, not in code.
+| Name | f01 | f02 | f03 | f04 | f05 | f06 | f07 | f08 | f09 | f10 |
+|------|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| Pin  | 2   | 3   | 4   | 5   | 6   | 9   | 16  | 17  | 22  | 14  |
+
+**Side, top to bottom:**
+
+| Name | s01 | s02 | s03 | s04 | s05 | s06 | s07 | s08 |
+|------|-----|-----|-----|-----|-----|-----|-----|-----|
+| Pin  | 15  | 28  | 29  | 33  | 36  | 37  | 10  | 11  |
+
+Each tier of LEDs lights up as amplitude crosses its threshold, spreading outward from the middle of the front row:
+
+| Tier | LEDs | Pins | Description |
+|------|------|------|-------------|
+| 1 | front 05, 06 | 6, 9 | innermost front pair -- first to light |
+| 2 | front 04, 07 + side 01, 02 | 5, 16, 15, 28 | |
+| 3 | front 03, 08 + side 03, 04 | 4, 17, 29, 33 | |
+| 4 | front 02, 09 + side 05, 06 | 3, 22, 36, 37 | |
+| 5 | front 01, 10 + side 07, 08 | 2, 14, 10, 11 | outermost (full open) |
 
 Four channels were moved in v1_8: pins 24/25 are Serial6 to the receiver (driving them as PWM killed the serial link), and pins 38/39 have no PWM hardware on the Teensy 4.1 (they could only snap on/off). Those four LED channels now live on 14/15 and 10/11.
 
@@ -64,26 +76,26 @@ The smoothing constant `PEAK_SMOOTHING` (default 0.80) controls how fast the dis
 
 | Teensy Pin | Function |
 |------------|----------|
-| 2 | Tier 5 LED |
-| 3 | Tier 4 LED |
-| 4 | Tier 3 LED |
-| 5 | Tier 2 LED |
-| 6 | Tier 1 LED |
-| 9 | Tier 1 LED |
-| 10 | Tier 5 LED pair |
-| 11 | Tier 5 LED pair |
-| 14 | Tier 5 LED |
-| 15 | Tier 2 LED pair |
-| 16 | Tier 2 LED |
-| 17 | Tier 3 LED |
-| 22 | Tier 4 LED |
+| 2 | front_LED_01 (tier 5) |
+| 3 | front_LED_02 (tier 4) |
+| 4 | front_LED_03 (tier 3) |
+| 5 | front_LED_04 (tier 2) |
+| 6 | front_LED_05 (tier 1, innermost) |
+| 9 | front_LED_06 (tier 1, innermost) |
+| 10 | side_LED_07 (tier 5) |
+| 11 | side_LED_08 (tier 5) |
+| 14 | front_LED_10 (tier 5) |
+| 15 | side_LED_01 (tier 2) |
+| 16 | front_LED_07 (tier 2) |
+| 17 | front_LED_08 (tier 3) |
+| 22 | front_LED_09 (tier 4) |
 | 24 | Serial6 TX to j4_receiver (receiver GPIO 2) |
 | 25 | Serial6 RX from j4_receiver (receiver GPIO 17) |
-| 28 | Tier 2 LED pair |
-| 29 | Tier 3 LED pair |
-| 33 | Tier 3 LED pair |
-| 36 | Tier 4 LED pair |
-| 37 | Tier 4 LED pair |
+| 28 | side_LED_02 (tier 2) |
+| 29 | side_LED_03 (tier 3) |
+| 33 | side_LED_04 (tier 3) |
+| 36 | side_LED_05 (tier 4) |
+| 37 | side_LED_06 (tier 4) |
 
 Audio Shield Rev D occupies 7, 8, 20, 21, 23 (I2S) and 18, 19 (I2C); the SD card uses the Teensy 4.1 built-in slot. All LED pins are chosen to avoid those.
 
@@ -93,36 +105,38 @@ Standard Teensy 4.1 layout, component side up, USB at the TOP. The two long
 edges read top-to-bottom; `*` marks a pin this firmware uses.
 
 ```
-                      +======[ USB ]======+
-                GND  -| GND            5V |-  5V
-                 0   -|  0            GND |-  GND
-                 1   -|  1           3.3V |-  3.3V
-      LED T5     2  *-|  2            23  |-  (audio I2S)
-      LED T4     3  *-|  3            22  |-* LED T4
-      LED T3     4  *-|  4            21  |-  (audio I2S)
-      LED T2     5  *-|  5            20  |-  (audio I2S)
-      LED T1     6  *-|  6            19  |-  (audio I2C)
-      (audio)    7   -|  7            18  |-  (audio I2C)
-      (audio)    8   -|  8            17  |-* LED T3
-      LED T1     9  *-|  9            16  |-* LED T2
-      LED T5     10 *-| 10            15  |-* LED T2
-      LED T5     11 *-| 11            14  |-* LED T5
-                 12  -| 12            13  |-  (LED_BUILTIN)
-   Serial6 TX    24 *-| 24            41  |-
-   Serial6 RX    25 *-| 25            40  |-
-                 26  -| 26            39  |-
-                 27  -| 27            38  |-
-      LED T2     28 *-| 28            37  |-* LED T4
-      LED T3     29 *-| 29            36  |-* LED T4
-                 30  -| 30            35  |-
-                 31  -| 31            34  |-
-                 32  -| 32         (bottom: SD card + SMD pads)
-      LED T3     33 *-| 33                |
-                      +===================+
+                          +======[ USB ]======+
+                    GND  -| GND            5V |-  5V
+                     0   -|  0            GND |-  GND
+                     1   -|  1           3.3V |-  3.3V
+  front_LED_01 (T5)  2  *-|  2            23  |-  (audio I2S)
+  front_LED_02 (T4)  3  *-|  3            22  |-* front_LED_09 (T4)
+  front_LED_03 (T3)  4  *-|  4            21  |-  (audio I2S)
+  front_LED_04 (T2)  5  *-|  5            20  |-  (audio I2S)
+  front_LED_05 (T1)  6  *-|  6            19  |-  (audio I2C)
+      (audio)        7   -|  7            18  |-  (audio I2C)
+      (audio)        8   -|  8            17  |-* front_LED_08 (T3)
+  front_LED_06 (T1)  9  *-|  9            16  |-* front_LED_07 (T2)
+   side_LED_07 (T5)  10 *-| 10            15  |-* side_LED_01 (T2)
+   side_LED_08 (T5)  11 *-| 11            14  |-* front_LED_10 (T5)
+                     12  -| 12            13  |-  (LED_BUILTIN)
+   Serial6 TX        24 *-| 24            41  |-
+   Serial6 RX        25 *-| 25            40  |-
+                     26  -| 26            39  |-
+                     27  -| 27            38  |-
+   side_LED_02 (T2)  28 *-| 28            37  |-* side_LED_06 (T4)
+   side_LED_03 (T3)  29 *-| 29            36  |-* side_LED_05 (T4)
+                     30  -| 30            35  |-
+                     31  -| 31            34  |-
+                     32  -| 32         (bottom: SD card + SMD pads)
+   side_LED_04 (T3)  33 *-| 33                |
+                          +===================+
 
    Serial6: 24 (TX) -> j4_receiver GPIO 2 ;  25 (RX) <- j4_receiver GPIO 17
    Audio Shield Rev D uses 7, 8, 20, 21, 23 (I2S) + 18, 19 (I2C) + built-in SD.
-   LED tiers: T1 6,9 | T2 5,16,15,28 | T3 4,17,29,33 | T4 3,22,36,37 | T5 2,14,10,11
+   front_LED_01..10 = front row left to right (pins 2,3,4,5,6,9,16,17,22,14);
+   front 05/06 light first. side_LED_01..08 = down the side, top to bottom
+   (pins 15,28,29,33,36,37,10,11).
 ```
 
 ## Jukebox serial protocol

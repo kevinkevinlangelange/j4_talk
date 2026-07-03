@@ -15,6 +15,7 @@
 //     last updated:  2026-06-10 -- CDT
 //     last updated:  2026-06-17 -- CDT (added "PING" heartbeat over Serial6 so
 //                    j4_receiver/j4_controller can show j4_talk as connected)
+//     last updated:  2026-07-02 -- CDT
 //
 //           author:  Kevin Lange
 //      description:  Main code for Johnny 4 voice audio and mouth LEDs
@@ -52,6 +53,13 @@
 //                           -- Re-send file list on LIST? request from receiver
 //                           -- Report end of track over serial so the now-playing
 //                              highlight clears on the controller display
+//                    v1_9   -- Named every LED channel after its physical position:
+//                              FRONT_LED_01..10 (front row, left to right; 05/06 are
+//                              the innermost pair that lights first) and
+//                              SIDE_LED_01..08 (down the side, top to bottom). One
+//                              LED per pin -- the old "pins drive pairs" note was
+//                              wrong, there are 18 LEDs total. Tier arrays, header,
+//                              README, and the pin-diagram PDF all use the names.
 //
 //
 //
@@ -106,8 +114,15 @@
 //  24:   Serial Transmit (TX6) to LilyGO TTGO T-Display j4_receiver (pin 2)
 //  25:   Serial Receive (RX6) from LilyGO TTGO T-Display j4_receiver (pin 17)
 //
-//  Mouth LED channels (PWM, via RFP30N06LE MOSFET gates):
-//  02, 03, 04, 05, 06, 09, 10, 11, 14, 15, 16, 17, 22, 28, 29, 33, 36, 37
+//  Mouth LED channels (PWM, via RFP30N06LE MOSFET gates) -- 18 LEDs total,
+//  named after their physical position (see the layout further down):
+//    front row, left to right:
+//      front_LED_01=2   front_LED_02=3   front_LED_03=4   front_LED_04=5
+//      front_LED_05=6   front_LED_06=9   front_LED_07=16  front_LED_08=17
+//      front_LED_09=22  front_LED_10=14
+//    down the side, top to bottom:
+//      side_LED_01=15   side_LED_02=28   side_LED_03=29   side_LED_04=33
+//      side_LED_05=36   side_LED_06=37   side_LED_07=10   side_LED_08=11
 //
 //  Used by Audio Shield Rev D (do not reuse):
 //  07, 08, 20, 21, 23 (I2S) and 18, 19 (I2C)
@@ -131,25 +146,24 @@
 // Audio-Reactive Robot Mouth -- Teensy 4.1 + Audio Shield Rev D
 // =============================================================================
 //
-//           MOUTH LED PHYSICAL LAYOUT:
+//           MOUTH LED PHYSICAL LAYOUT (18 LEDs, one per pin):
 //
-//            2   3   4   5   6   ||  9   16   17   22   14
-//            15                                                          15
-//            28                                                          28
-//            29                                                          29
-//            33                                                          33
-//            36                                                          36
-//            37                                                          37
-//            10                                                          10
-//            11                                                          11
+//   front row, left to right (front_LED_01 .. front_LED_10):
+//
+//     f01  f02  f03  f04  f05  ||  f06  f07  f08  f09  f10
+//      2    3    4    5    6   ||   9   16   17   22   14
+//
+//   down the side, top to bottom (side_LED_01 .. side_LED_08):
+//
+//     s01=15  s02=28  s03=29  s04=33  s05=36  s06=37  s07=10  s08=11
 //
 // AMPLITUDE TIERS (each tier ADDS to the previous one):
 //   Level 0 (silence):  all off
-//   Level 1 (quiet):    6, 9                       (innermost pair)
-//   Level 2:           +5, 16, 15, 28
-//   Level 3:           +4, 17, 29, 33
-//   Level 4:           +3, 22, 36, 37
-//   Level 5 (loudest): +2, 14, 10, 11              (outermost)
+//   Level 1 (quiet):    front 05+06                 (innermost front pair)
+//   Level 2:           +front 04+07, side 01+02
+//   Level 3:           +front 03+08, side 03+04
+//   Level 4:           +front 02+09, side 05+06
+//   Level 5 (loudest): +front 01+10, side 07+08     (outermost)
 //
 // BRIGHTNESS BEHAVIOUR:
 //   - Lower tiers stay fully lit at 255.
@@ -157,21 +171,41 @@
 //     0 to 255 as amplitude rises toward the next threshold.
 //   - Brightness is gamma-corrected so partial-tier ramps look visually
 //     linear to the human eye.
-//
-// Note: pins 10, 11, 15, 28, 29, 33, 36, 37 each drive a pair of LEDs
-//       wired in parallel -- handled by the wiring, not the code.
 // =============================================================================
 
 // ---------------------------------------------------------------------------
-// AMPLITUDE TIER PIN GROUPS
+// LED PIN NAMES (physical position -> Teensy pin)
 // ---------------------------------------------------------------------------
 // Pins 24/25 are Serial6 to the receiver and pins 38/39 have no PWM hardware
 // on the Teensy 4.1, so those four channels live on 14/15 and 10/11 instead.
-const uint8_t TIER_1_PINS[] = { 6, 9 };
-const uint8_t TIER_2_PINS[] = { 5, 16, 15, 28 };
-const uint8_t TIER_3_PINS[] = { 4, 17, 29, 33 };
-const uint8_t TIER_4_PINS[] = { 3, 22, 36, 37 };
-const uint8_t TIER_5_PINS[] = { 2, 14, 10, 11 };
+#define FRONT_LED_01   2
+#define FRONT_LED_02   3
+#define FRONT_LED_03   4
+#define FRONT_LED_04   5
+#define FRONT_LED_05   6   // innermost pair -- first to light
+#define FRONT_LED_06   9   // innermost pair -- first to light
+#define FRONT_LED_07  16
+#define FRONT_LED_08  17
+#define FRONT_LED_09  22
+#define FRONT_LED_10  14
+
+#define SIDE_LED_01   15
+#define SIDE_LED_02   28
+#define SIDE_LED_03   29
+#define SIDE_LED_04   33
+#define SIDE_LED_05   36
+#define SIDE_LED_06   37
+#define SIDE_LED_07   10
+#define SIDE_LED_08   11
+
+// ---------------------------------------------------------------------------
+// AMPLITUDE TIER PIN GROUPS (built from the position names above)
+// ---------------------------------------------------------------------------
+const uint8_t TIER_1_PINS[] = { FRONT_LED_05, FRONT_LED_06 };
+const uint8_t TIER_2_PINS[] = { FRONT_LED_04, FRONT_LED_07, SIDE_LED_01, SIDE_LED_02 };
+const uint8_t TIER_3_PINS[] = { FRONT_LED_03, FRONT_LED_08, SIDE_LED_03, SIDE_LED_04 };
+const uint8_t TIER_4_PINS[] = { FRONT_LED_02, FRONT_LED_09, SIDE_LED_05, SIDE_LED_06 };
+const uint8_t TIER_5_PINS[] = { FRONT_LED_01, FRONT_LED_10, SIDE_LED_07, SIDE_LED_08 };
 
 const uint8_t TIER_1_COUNT = sizeof(TIER_1_PINS) / sizeof(TIER_1_PINS[0]);
 const uint8_t TIER_2_COUNT = sizeof(TIER_2_PINS) / sizeof(TIER_2_PINS[0]);
@@ -182,8 +216,10 @@ const uint8_t TIER_5_COUNT = sizeof(TIER_5_PINS) / sizeof(TIER_5_PINS[0]);
 const uint8_t NUM_TIERS = 5;
 
 const uint8_t ALL_PINS[] = {
-  2, 3, 4, 5, 6, 9, 10, 11, 14,
-  15, 16, 17, 22, 28, 29, 33, 36, 37
+  FRONT_LED_01, FRONT_LED_02, FRONT_LED_03, FRONT_LED_04, FRONT_LED_05,
+  FRONT_LED_06, FRONT_LED_07, FRONT_LED_08, FRONT_LED_09, FRONT_LED_10,
+  SIDE_LED_01,  SIDE_LED_02,  SIDE_LED_03,  SIDE_LED_04,
+  SIDE_LED_05,  SIDE_LED_06,  SIDE_LED_07,  SIDE_LED_08
 };
 const uint8_t NUM_PINS = sizeof(ALL_PINS) / sizeof(ALL_PINS[0]);
 
