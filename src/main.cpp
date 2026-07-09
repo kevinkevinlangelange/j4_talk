@@ -10,6 +10,7 @@
 //     last updated:  2025-07-17 -- 0004 PDT -KL
 //     last updated:  2026-04-29 -- 0251 CDT -KL
 //     last updated:  2026-06-01 -- 1520 CDT
+//     last updated:  2026-07-08 -- CDT (serial line-noise guard: cap serialBuf growth)
 //     last updated:  2026-06-02 -- 0953 CDT
 //     last updated:  2026-06-02 -- 1015 CDT
 //     last updated:  2026-06-10 -- CDT
@@ -514,6 +515,10 @@ void checkSerial() {
       if (serialBuf.length() > 0) processSerialLine(serialBuf);
       serialBuf = "";
     } else if (c != '\r') {
+      // Length guard: with j4_receiver unplugged the floating RX pin can
+      // stream garbage with no newline, growing the String until the heap
+      // dies. Longest real line is "PLAY:xx" / "LIST?" -- 48 is generous.
+      if (serialBuf.length() > 48) serialBuf = "";
       serialBuf += c;
     }
   }
