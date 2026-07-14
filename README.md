@@ -151,6 +151,14 @@ The board talks to j4_receiver over Serial6 at 115200 baud:
 | in | `LIST?` | re-send the file list |
 | out | `PLAYING:<id>` | a track started (empty payload = stopped / finished) |
 | out | `LIST_START:<n>` ... `<id>\|<name>` ... `LIST_END` | the SD-card file list |
+| in | `FACES?` | dump every saved face preset |
+| in | `FACESAVE:<key>,<11 values>,<toggles>` | save/overwrite one face and rewrite FACES.TXT |
+| out | `FACE:<key>,<11 values>,<toggles>` ... `FACE_END:<n>` | the saved-face dump |
+| out | `FACEOK:<key>` / `FACEERR:<key>` | SD write confirmed / failed |
+
+## Face presets (FACES.TXT)
+
+The controller's right keypad saves and recalls facial expressions ("faces"); this board is their persistent home because it has the only microSD in the system. `FACES.TXT` in the SD root holds one CSV line per face: `<key>,<11 values>,<toggles>` -- the keypad character, the 11 face-pot values (iris, color, brightness, eyebrows, nose, eyelids; the controller owns the meaning and order), and a LASER/VENT/EYE POP toggle bitmask. The whole file is rewritten on every save (it is at most 16 short lines). A missing or unreadable FACES.TXT simply means zero saved faces; every malformed line is skipped field-by-field, and boot never hangs on any of it.
 
 ## WAV files
 

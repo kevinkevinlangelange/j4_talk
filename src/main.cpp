@@ -17,6 +17,14 @@
 //     last updated:  2026-06-17 -- CDT (added "PING" heartbeat over Serial6 so
 //                    j4_receiver/j4_controller can show j4_talk as connected)
 //     last updated:  2026-07-02 -- CDT
+//     last updated:  2026-07-08 -- CDT (serial line-noise guard on serialBuf)
+//     last updated:  2026-07-14 -- CDT (FACE PRESETS: FACES.TXT on the microSD.
+//                    "FACES?" dumps every saved face as "FACE:<key>,<11 csv
+//                    values>,<toggles>" lines + "FACE_END:<count>";
+//                    "FACESAVE:<same csv>" upserts one face, rewrites
+//                    FACES.TXT, and answers FACEOK:<key> / FACEERR:<key>.
+//                    A missing or unreadable FACES.TXT just means zero saved
+//                    faces -- boot never hangs on it. Line guard 48 -> 96.)
 //
 //           author:  Kevin Lange
 //      description:  Main code for Johnny 4 voice audio and mouth LEDs
@@ -299,6 +307,24 @@ int           lastVolume      = -1;  // last 0-100 value applied to the SGTL5000
 unsigned long playStartMillis = 0;
 
 // ---------------------------------------------------------------------------
+// FACE PRESETS (saved facial expressions, persisted in FACES.TXT on the SD)
+// One CSV line per face: <key>,<11 values>,<toggles>. The controller owns
+// what the values mean; this board just stores and echoes them.
+// ---------------------------------------------------------------------------
+const uint8_t FACE_VALUES = 11;
+const uint8_t MAX_FACES   = 16;
+const char   *FACES_FILE  = "FACES.TXT";
+
+struct FaceRec {
+  char    key;                // keypad character, 0 = empty slot
+  int16_t v[FACE_VALUES];
+  uint8_t toggles;
+};
+
+FaceRec faceTable[MAX_FACES];
+uint8_t faceCount = 0;
+
+// ---------------------------------------------------------------------------
 // FORWARD DECLARATIONS
 // ---------------------------------------------------------------------------
 void    initLEDs();
@@ -313,6 +339,11 @@ void    scanSD();
 void    sendFileList();
 void    checkSerial();
 void    processSerialLine(const String &line);
+bool    parseFaceCsv(const char *s, FaceRec &f);
+void    loadFaces();
+bool    saveFacesFile();
+void    dumpFaces();
+void    handleFaceSave(const String &line);
 
 // ---------------------------------------------------------------------------
 // SETUP
@@ -326,6 +357,7 @@ void setup() {
 
   scanSD();
   sendFileList();
+  loadFaces();   // missing/unreadable FACES.TXT = zero faces, never a hang
 
   Serial.println("Robot mouth ready.");
 }
@@ -517,11 +549,100 @@ void checkSerial() {
     } else if (c != '\r') {
       // Length guard: with j4_receiver unplugged the floating RX pin can
       // stream garbage with no newline, growing the String until the heap
-      // dies. Longest real line is "PLAY:xx" / "LIST?" -- 48 is generous.
-      if (serialBuf.length() > 48) serialBuf = "";
+      // dies. Longest real line is "FACESAVE:..." at ~70 chars.
+      if (serialBuf.length() > 96) serialBuf = "";
       serialBuf += c;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// FACE PRESETS
+// ---------------------------------------------------------------------------
+
+// "C,v0,...,v10,t" -- every field validated so a corrupt FACES.TXT line or
+// serial garbage cannot fabricate a face.
+bool parseFaceCsv(const char *s, FaceRec &f) {
+  if (!s[0] || s[1] != ',') return false;
+  f.key = s[0];
+  const char *p = s + 2;
+  char *end;
+  for (uint8_t i = 0; i < FACE_VALUES; i++) {
+    long val = strtol(p, &end, 10);
+    if (end == p || *end != ',') return false;
+    f.v[i] = (int16_t)val;
+    p = end + 1;
+  }
+  long t = strtol(p, &end, 10);
+  if (end == p || *end != '\0') return false;
+  f.toggles = (uint8_t)t;
+  return true;
+}
+
+FaceRec *faceFind(char key) {
+  for (uint8_t i = 0; i < faceCount; i++)
+    if (faceTable[i].key == key) return &faceTable[i];
+  return NULL;
+}
+
+void loadFaces() {
+  faceCount = 0;
+  File f = SD.open(FACES_FILE);
+  if (!f) {
+    Serial.println("No FACES.TXT -- zero saved faces.");
+    return;
+  }
+  char lineBuf[100];
+  uint8_t pos = 0;
+  while (f.available() && faceCount < MAX_FACES) {
+    char c = (char)f.read();
+    if (c == '\n') {
+      lineBuf[pos] = '\0';
+      pos = 0;
+      FaceRec rec;
+      if (parseFaceCsv(lineBuf, rec)) faceTable[faceCount++] = rec;
+    } else if (c != '\r') {
+      if (pos < sizeof(lineBuf) - 1) lineBuf[pos++] = c;
+      else pos = 0;   // over-long garbage line -- drop and resync
+    }
+  }
+  f.close();
+  Serial.printf("FACES.TXT: %d faces loaded.\n", faceCount);
+}
+
+// Rewrite the whole file from the RAM table (it is at most 16 short lines).
+bool saveFacesFile() {
+  SD.remove(FACES_FILE);   // Teensy SD FILE_WRITE appends, so start clean
+  File f = SD.open(FACES_FILE, FILE_WRITE);
+  if (!f) return false;
+  for (uint8_t i = 0; i < faceCount; i++) {
+    FaceRec &r = faceTable[i];
+    f.printf("%c,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u\n",
+             r.key, r.v[0], r.v[1], r.v[2], r.v[3], r.v[4], r.v[5],
+             r.v[6], r.v[7], r.v[8], r.v[9], r.v[10], r.toggles);
+  }
+  f.close();
+  return true;
+}
+
+void dumpFaces() {
+  for (uint8_t i = 0; i < faceCount; i++) {
+    FaceRec &r = faceTable[i];
+    Serial6.printf("FACE:%c,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u\n",
+                   r.key, r.v[0], r.v[1], r.v[2], r.v[3], r.v[4], r.v[5],
+                   r.v[6], r.v[7], r.v[8], r.v[9], r.v[10], r.toggles);
+  }
+  Serial6.printf("FACE_END:%d\n", faceCount);
+}
+
+void handleFaceSave(const String &line) {
+  FaceRec rec;
+  if (!parseFaceCsv(line.c_str() + 9, rec)) return;   // malformed -- ignore
+  FaceRec *slot = faceFind(rec.key);
+  if (!slot && faceCount < MAX_FACES) slot = &faceTable[faceCount++];
+  if (!slot) { Serial6.printf("FACEERR:%c\n", rec.key); return; }
+  *slot = rec;
+  Serial6.printf(saveFacesFile() ? "FACEOK:%c\n" : "FACEERR:%c\n", rec.key);
 }
 
 void processSerialLine(const String &line) {
@@ -547,6 +668,12 @@ void processSerialLine(const String &line) {
   } else if (line == "LIST?") {
     // Receiver missed the boot-time list (it booted after us) -- send it again
     sendFileList();
+
+  } else if (line == "FACES?") {
+    dumpFaces();
+
+  } else if (line.startsWith("FACESAVE:")) {
+    handleFaceSave(line);
 
   } else {
     // "volume,neck" CSV from j4_receiver. Volume is 0-100 from the controller
