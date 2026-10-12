@@ -106,7 +106,7 @@ edges read top-to-bottom; `*` marks a pin this firmware uses.
 
 ```
                           +======[ USB ]======+
-                    GND  -| GND            5V |-  5V
+                    GND  -| GND           VIN |-  5V
                      0   -|  0            GND |-  GND
                      1   -|  1           3.3V |-  3.3V
   front_LED_01 (T5)  2  *-|  2            23  |-  (audio I2S)
@@ -120,6 +120,7 @@ edges read top-to-bottom; `*` marks a pin this firmware uses.
    side_LED_07 (T5)  10 *-| 10            15  |-* side_LED_01 (T2)
    side_LED_08 (T5)  11 *-| 11            14  |-* front_LED_10 (T5)
                      12  -| 12            13  |-  (LED_BUILTIN)
+                   3.3V  -| 3.3V          GND |-  GND
    Serial6 TX        24 *-| 24            41  |-
    Serial6 RX        25 *-| 25            40  |-
                      26  -| 26            39  |-
@@ -128,9 +129,9 @@ edges read top-to-bottom; `*` marks a pin this firmware uses.
    side_LED_03 (T3)  29 *-| 29            36  |-* side_LED_05 (T4)
                      30  -| 30            35  |-
                      31  -| 31            34  |-
-                     32  -| 32         (bottom: SD card + SMD pads)
-   side_LED_04 (T3)  33 *-| 33                |
+                     32  -| 32            33  |-* side_LED_04 (T3)
                           +===================+
+                       (bottom: SD card + SMD pads)
 
    Serial6: 24 (TX) -> j4_receiver GPIO 2 ;  25 (RX) <- j4_receiver GPIO 17
    Audio Shield Rev D uses 7, 8, 20, 21, 23 (I2S) + 18, 19 (I2C) + built-in SD.
@@ -138,6 +139,8 @@ edges read top-to-bottom; `*` marks a pin this firmware uses.
    front 05/06 light first. side_LED_01..08 = down the side, top to bottom
    (pins 15,28,29,33,36,37,10,11).
 ```
+
+Corrected 2026-10-12 to the standard Teensy 4.1 pinout: each long edge has 24 pins, so there is a 3.3V pin between 12 and 24 on the left edge and a GND between 13 and 41 on the right, and pin 33 sits on the right edge opposite 32. The earlier drawing dropped both power pins and put 33 on the left. Wiring is unchanged; only the drawing was wrong.
 
 ## Jukebox serial protocol
 
