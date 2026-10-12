@@ -97,7 +97,9 @@ The smoothing constant `PEAK_SMOOTHING` (default 0.80) controls how fast the dis
 | 36 | side_LED_05 (tier 4) |
 | 37 | side_LED_06 (tier 4) |
 
-Audio Shield Rev D occupies 7, 8, 20, 21, 23 (I2S) and 18, 19 (I2C); the SD card uses the Teensy 4.1 built-in slot. All LED pins are chosen to avoid those.
+Audio Shield Rev D occupies 7, 8, 20, 21, 23 (I2S) and 18, 19 (I2C); the SD card uses the Teensy 4.1 built-in slot. All LED pins avoid those.
+
+The shield is also wired to 6 (memory chip CS), 10/11/12/13 (its own SD slot: CS/MOSI/MISO/SCK) and 15 (volume thumbwheel), per PJRC's Rev D pin table. Four LED pins share those lines: 6, 10, 11 and 15. That is harmless as long as the shield's SD slot stays **empty**, the optional memory chip is **not fitted**, and the volume thumbwheel pot is **not soldered** (stock Rev D ships without either). Don't add any of those three without moving the LEDs that share their pins first.
 
 ## Pin diagram
 
@@ -119,7 +121,7 @@ edges read top-to-bottom; `*` marks a pin this firmware uses.
   front_LED_06 (T1)  9  *-|  9            16  |-* front_LED_07 (T2)
    side_LED_07 (T5)  10 *-| 10            15  |-* side_LED_01 (T2)
    side_LED_08 (T5)  11 *-| 11            14  |-* front_LED_10 (T5)
-                     12  -| 12            13  |-  (LED_BUILTIN)
+      (audio SD)     12  -| 12            13  |-  (audio SD, LED)
                    3.3V  -| 3.3V          GND |-  GND
    Serial6 TX        24 *-| 24            41  |-
    Serial6 RX        25 *-| 25            40  |-
@@ -135,6 +137,8 @@ edges read top-to-bottom; `*` marks a pin this firmware uses.
 
    Serial6: 24 (TX) -> j4_receiver GPIO 2 ;  25 (RX) <- j4_receiver GPIO 17
    Audio Shield Rev D uses 7, 8, 20, 21, 23 (I2S) + 18, 19 (I2C) + built-in SD.
+   The shield is also tied to 6, 10-13, 15 (memory CS, its SD slot, volume pot):
+   keep its SD slot empty and no memory chip or volume pot fitted.
    front_LED_01..10 = front row left to right (pins 2,3,4,5,6,9,16,17,22,14);
    front 05/06 light first. side_LED_01..08 = down the side, top to bottom
    (pins 15,28,29,33,36,37,10,11).
